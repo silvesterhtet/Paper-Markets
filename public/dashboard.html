@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>Dashboard</h1>
+    <div>
+      <canvas id="portfolioChart"></canvas>
+    </div>
+    <div class="form-group">
+      <label for="timeframe">Timeframe:</label>
+      <select id="timeframe" class="form-control">
+        <option value="1d">1 Day</option>
+        <option value="5d">5 Days</option>
+        <option value="1y">1 Year</option>
+        <option value="max">Max</option>
+      </select>
+    </div>
+    <div id="positions">
+      <!-- Positions will be dynamically loaded here -->
+    </div>
+    <div class="form-group">
+      <label for="search">Search for Stocks:</label>
+      <input type="text" id="search" class="form-control" placeholder="Enter stock symbol">
+      <button id="searchButton" class="btn btn-primary mt-2">Search</button>
+    </div>
+    <div id="searchResults">
+      <!-- Search results will be dynamically loaded here -->
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', async function() {
+      const ctx = document.getElementById('portfolioChart').getContext('2d');
+      const timeframeSelect = document.getElementById('timeframe');
+      const positionsDiv = document.getElementById('positions');
+      const searchInput = document.getElementById('search');
+      const searchButton = document.getElementById('searchButton');
+      const searchResultsDiv = document.getElementById('searchResults');
+
+      const fetchPortfolioInfo = async () => {
+        const response = await fetch('/portfolio/info');
+        const positions = await response.json();
+        positionsDiv.innerHTML = `
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Symbol</th>
+                <th>Mkt Value/Qty</th>
+                <th>Open P&L</th>
+                <th>Last/Avg Price</th>
+                <th>Day's P&L</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${positions.map(position => `
+                <tr>
+                  <td>${position.symbol}<br><small>${position.name.substring(0, 20)}</small></td>
+                  <td>${(position.price * position.shares).toFixed(2)}<br><small>${position.shares}</small></td>
+                  <td>TODO<br><small>TODO%</small></td>
+                  <td>${position.price.toFixed(2)}<br><small>TODO</small></td>
+                  <td>TODO<br><small>TODO%</small></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      };
+
+      const fetchPortfolioHistory = async (timeframe) => {
+        const response = await fetch(`/portfolio/history?timeframe=${timeframe}`);
+        const history = await response.json();
+        const labels = history.map(entry => entry.date);
+        const data = history.map(entry => entry.value);
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Portfolio Value',
+              data: data,
+              borderColor: 'rgba(75, 192, 192, 1)',
+              borderWidth: 1
+            }]
+          },
+          options: {
+            scales: {
+              x: {
+                type: 'time',
+                time: {
+                  unit: 'day'
+                }
+              }
+            }
+          }
+        });
+      };
+
+      const searchStocks = async () => {
+        const symbol = searchInput.value;
+        const response = await fetch(`/portfolio/search?symbol=${symbol}`);
+        const results = await response.json();
+        searchResultsDiv.innerHTML = results.map(result => `
+          <div class="search-result">
+            <span>${result['1. symbol']} - ${result['2. name']}</span>
+            <button class="btn btn-primary" onclick="addStock('${result['1. symbol']}', '${result['2. name']}')">Add to Portfolio</button>
+          </div>
+        `).join('');
+      };
+
+      searchButton.addEventListener('click', searchStocks);
+
+      timeframeSelect.addEventListener('change', () => {
+        fetchPortfolioHistory(timeframeSelect.value);
+      });
+
+      await fetchPortfolioInfo();
+      await fetchPortfolioHistory(timeframeSelect.value);
+
+      // Update positions every 5 minutes
+      setInterval(fetchPortfolioInfo, 300000); // 300000 ms = 5 minutes
+    });
+
+    const buyStock = async (symbol) => {
+      const shares = prompt('Enter number of shares to buy:');
+      if (shares) {
+        const response = await fetch('/portfolio/buy', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ symbol, shares })
+        });
+        const result = await response.json();
+        alert(result.message);
+        location.reload();
+      }
+    };
+
+    const sellStock = async (symbol) => {
+      const shares = prompt('Enter number of shares to sell:');
+      if (shares) {
+        const response = await fetch('/portfolio/sell', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ symbol, shares })
+        });
+        const result = await response.json();
+        alert(result.message);
+        location.reload();
+      }
+    };
+
+    const addStock = async (symbol, name) => {
+      const price = prompt('Enter the price of the stock:');
+      const shares = prompt('Enter number of shares to add:');
+      if (price && shares) {
+        const response = await fetch('/portfolio/buy', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ symbol, name, price, shares })
+        });
+        const result = await response.json();
+        alert(result.message);
+        location.reload();
+      }
+    };
+  </script>
+</body>
+</html>
